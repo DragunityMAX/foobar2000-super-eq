@@ -1,0 +1,72 @@
+name: Build foo_super_eq
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  test-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and Run Core DSP Tests
+        run: make test && make cli
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and Run Windows Core Tests
+        shell: pwsh
+        run: |
+          cmake -S . -B build-tests -A x64
+          cmake --build build-tests --config Release --target super_eq_tests super_eq_cli
+          .\build-tests\Release\super_eq_tests.exe
+
+      - name: Download foobar2000 SDK and WTL
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path deps | Out-Null
+          $sdkPage = Invoke-WebRequest -Uri "https://www.foobar2000.org/SDK" -UseBasicParsing
+          $sdkLink = ($sdkPage.Links | Where-Object { $_.href -match "SDK.*\.7z$" } | Select-Object -First 1).href
+          if (-not $sdkLink.StartsWith("http")) {
+            $sdkLink = "https://www.foobar2000.org" + $sdkLink
+          }
+          Invoke-WebRequest -Uri $sdkLink -OutFile deps/fb2k_sdk.7z
+          7z x deps/fb2k_sdk.7z -odeps/fb2k_sdk -y | Out-Null
+
+          Invoke-WebRequest -Uri "https://sourceforge.net/projects/wtl/files/WTL%2010/WTL%2010.0.10320/WTL10_10320_Release.zip/download" -OutFile deps/wtl.zip
+          Expand-Archive deps/wtl.zip -DestinationPath deps/wtl -Force
+
+      - name: Build foobar2000 SDK Libraries & foo_super_eq (x64 & x86)
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Compile SDK + Component (x64 & Win32)
+        shell: pwsh
+        run: |
+          $sdkDir = (Resolve-Path deps/fb2k_sdk).Path
+          $wtlDir = (Resolve-Path deps/wtl/Include).Path
+          $sln = Get-ChildItem -Path $sdkDir -Filter "*.sln" -Recurse | Select-Object -First 1
+
+          foreach ($arch in @(@{msbuild="x64"; cmake="x64"; out="pkg/x64"}, @{msbuild="Win32"; cmake="Win32"; out="pkg"})) {
+            msbuild $sln.FullName /p:Configuration=Release /p:Platform=$($arch.msbuild) /p:AdditionalIncludeDirectories="$wtlDir" /m /t:pfc,foobar2000_SDK,foobar2000_sdk_helpers,foobar2000_component_client,libPPUI
+            $libDirs = Get-ChildItem -Path $sdkDir -Recurse -Filter "foobar2000_SDK.lib" | Where-Object { $_.FullName -match "Release" }
+            $libDir = ($libDirs | Select-Object -First 1).DirectoryName
+            $bdir = "build-fb2k-$($arch.cmake)"
+            cmake -S . -B $bdir -A $($arch.cmake) -DFB2K_SDK_DIR="$sdkDir" -DWTL_INCLUDE_DIR="$wtlDir" -DFB2K_SDK_LIB_DIR="$libDir" -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded"
+            cmake --build $bdir --config Release --target foo_super_eq
+            New-Item -ItemType Directory -Force -Path $arch.out | Out-Null
+            Copy-Item "$bdir/Release/foo_super_eq.dll" "$($arch.out)/foo_super_eq.dll"
+          }
+
+          Compress-Archive -Path pkg/* -DestinationPath foo_super_eq.fb2k-component -Force
+
+      - name: Upload .fb2k-component Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: foo_super_eq.fb2k-component
+          path: foo_super_eq.fb2k-component
