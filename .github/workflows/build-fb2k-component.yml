@@ -30,6 +30,7 @@ jobs:
       - name: Download foobar2000 SDK and WTL
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           New-Item -ItemType Directory -Force -Path deps | Out-Null
           $sdkPage = Invoke-WebRequest -Uri "https://www.foobar2000.org/SDK" -UseBasicParsing
           $sdkLink = ($sdkPage.Links | Where-Object { $_.href -match "SDK.*\.7z$" } | Select-Object -First 1).href
@@ -38,8 +39,13 @@ jobs:
           }
           Invoke-WebRequest -Uri $sdkLink -OutFile deps/fb2k_sdk.7z
           7z x deps/fb2k_sdk.7z -odeps/fb2k_sdk -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          git clone --depth 1 https://github.com/Win32-WTL/WTL.git deps/wtl
+          Invoke-WebRequest -Uri "https://api.nuget.org/v3-flatcontainer/wtl/10.1.0/wtl.10.1.0.nupkg" -OutFile deps/wtl.zip
+          7z x deps/wtl.zip -odeps/wtl-pkg -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force -Path deps/wtl/Include | Out-Null
+          Copy-Item -Path "deps/wtl-pkg/lib/native/include/*" -Destination "deps/wtl/Include" -Recurse -Force
           Copy-Item -Path "deps/wtl/Include/*" -Destination "deps/fb2k_sdk" -Recurse -Force
 
       - name: Setup MSBuild
@@ -48,6 +54,7 @@ jobs:
       - name: Compile SDK + Component (x64 & Win32)
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           $sdkDir = (Resolve-Path deps/fb2k_sdk).Path
           $wtlDir = (Resolve-Path deps/wtl/Include).Path
           $sdkProjects = @(
@@ -65,15 +72,29 @@ jobs:
 
             $bdir = "build-fb2k-$($arch.cmake)"
             cmake -S . -B $bdir -A $($arch.cmake) -DFB2K_SDK_DIR="$sdkDir" -DWTL_INCLUDE_DIR="$wtlDir" -DFB2K_SDK_LIB_DIR="$libDir"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-            $toolsetMatch = Select-String -Path "$bdir/CMakeCache.txt" -Pattern "^CMAKE_VS_PLATFORM_TOOLSET:INTERNAL=(.+)$"
-            $toolsetProp = if ($toolsetMatch) { "/p:PlatformToolset=$($toolsetMatch.Matches[0].Groups[1].Value)" } else { "" }
+            $toolsetMatch = Select-String -Path "$bdir/foo_super_eq.vcxproj" -Pattern "<PlatformToolset>([^<]+)</PlatformToolset>"
+            $msbuildArgs = @(
+              "/p:Configuration=Release",
+              "/p:Platform=$($arch.msbuild)",
+              "/p:WholeProgramOptimization=false",
+              "/p:OutDir=$libDir\",
+              "/m"
+            )
+            if ($toolsetMatch) {
+              $toolset = $toolsetMatch.Matches[0].Groups[1].Value
+              Write-Host "Using PlatformToolset: $toolset"
+              $msbuildArgs += "/p:PlatformToolset=$toolset"
+            }
 
             foreach ($proj in $sdkProjects) {
-              msbuild $proj /p:Configuration=Release /p:Platform=$($arch.msbuild) $toolsetProp /p:WholeProgramOptimization=false /p:OutDir="$libDir\" /m
+              & msbuild $proj @msbuildArgs
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             }
 
             cmake --build $bdir --config Release --target foo_super_eq
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             New-Item -ItemType Directory -Force -Path $arch.out | Out-Null
             Copy-Item "$bdir/Release/foo_super_eq.dll" "$($arch.out)/foo_super_eq.dll" -Force
           }
