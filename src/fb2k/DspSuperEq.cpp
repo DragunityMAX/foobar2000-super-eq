@@ -101,7 +101,7 @@ public:
         LiveSessionBus::instance().register_engine(&engine_, st);
     }
 
-    ~dsp_super_eq() override {
+    ~dsp_super_eq() {
         LiveSessionBus::instance().unregister_engine(&engine_);
     }
 

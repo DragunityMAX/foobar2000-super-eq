@@ -557,8 +557,8 @@ void SuperEqEditorView::push_state_change(bool live_only) {
 D2D1_RECT_F SuperEqEditorView::canvas_rect() const {
     RECT rc{};
     GetClientRect(&rc);
-    float right = static_cast<float>(std::max(100, (rc.right - rc.left) - kCalPanelWidth - 4));
-    float bottom = static_cast<float>(std::max(120, (rc.bottom - rc.top) - (show_table_ ? kTableHeight : 0) - 4));
+    float right = static_cast<float>(std::max<int>(100, static_cast<int>(rc.right - rc.left) - kCalPanelWidth - 4));
+    float bottom = static_cast<float>(std::max<int>(120, static_cast<int>(rc.bottom - rc.top) - (show_table_ ? kTableHeight : 0) - 4));
     return D2D1::RectF(6.0f, static_cast<float>(kTopBarHeight), right, bottom);
 }
 

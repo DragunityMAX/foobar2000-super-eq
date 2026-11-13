@@ -87,13 +87,22 @@ public:
         return ui_element_config::g_create_empty(guid_ui_element_super_eq);
     }
 
-    const char* get_description() override {
-        return "Left/Right & Mid/Side separated up-to-64-band Parametric & Linear-Phase FIR Equalizer "
-               "with real-time Pre/Post FFT spectrum analyzer.";
+    bool get_description(pfc::string_base& out) override {
+        out = "Left/Right & Mid/Side separated up-to-64-band Parametric & Linear-Phase FIR Equalizer "
+              "with real-time Pre/Post FFT spectrum analyzer.";
+        return true;
     }
 
     ui_element_children_enumerator_ptr enumerate_children(ui_element_config::ptr) override {
         return nullptr;
+    }
+
+    t_uint32 get_flags() override {
+        return 0;
+    }
+
+    bool bump() override {
+        return false;
     }
 };
 
@@ -110,7 +119,7 @@ public:
         static SuperEqFloatingWindow* s_inst = nullptr;
         if (s_inst && ::IsWindow(s_inst->m_hWnd)) {
             s_inst->ShowWindow(SW_RESTORE);
-            s_inst->SetForegroundWindow(s_inst->m_hWnd);
+            ::SetForegroundWindow(s_inst->m_hWnd);
             return;
         }
         if (!s_inst) {
