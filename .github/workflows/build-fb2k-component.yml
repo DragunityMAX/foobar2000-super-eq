@@ -39,10 +39,10 @@ jobs:
           Invoke-WebRequest -Uri $sdkLink -OutFile deps/fb2k_sdk.7z
           7z x deps/fb2k_sdk.7z -odeps/fb2k_sdk -y | Out-Null
 
-          Invoke-WebRequest -Uri "https://sourceforge.net/projects/wtl/files/WTL%2010/WTL%2010.0.10320/WTL10_10320_Release.zip/download" -OutFile deps/wtl.zip
-          Expand-Archive deps/wtl.zip -DestinationPath deps/wtl -Force
+          git clone --depth 1 https://github.com/Win32-WTL/WTL.git deps/wtl
+          Copy-Item -Path "deps/wtl/Include/*" -Destination "deps/fb2k_sdk" -Recurse -Force
 
-      - name: Build foobar2000 SDK Libraries & foo_super_eq (x64 & x86)
+      - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
       - name: Compile SDK + Component (x64 & Win32)
@@ -50,17 +50,32 @@ jobs:
         run: |
           $sdkDir = (Resolve-Path deps/fb2k_sdk).Path
           $wtlDir = (Resolve-Path deps/wtl/Include).Path
-          $sln = Get-ChildItem -Path $sdkDir -Filter "*.sln" -Recurse | Select-Object -First 1
+          $sdkProjects = @(
+            "$sdkDir/pfc/pfc.vcxproj",
+            "$sdkDir/foobar2000/SDK/foobar2000_SDK.vcxproj",
+            "$sdkDir/foobar2000/helpers/foobar2000_sdk_helpers.vcxproj",
+            "$sdkDir/foobar2000/foobar2000_component_client/foobar2000_component_client.vcxproj",
+            "$sdkDir/libPPUI/libPPUI.vcxproj"
+          )
 
           foreach ($arch in @(@{msbuild="x64"; cmake="x64"; out="pkg/x64"}, @{msbuild="Win32"; cmake="Win32"; out="pkg"})) {
-            msbuild $sln.FullName /p:Configuration=Release /p:Platform=$($arch.msbuild) /p:AdditionalIncludeDirectories="$wtlDir" /m /t:pfc,foobar2000_SDK,foobar2000_sdk_helpers,foobar2000_component_client,libPPUI
-            $libDirs = Get-ChildItem -Path $sdkDir -Recurse -Filter "foobar2000_SDK.lib" | Where-Object { $_.FullName -match "Release" }
-            $libDir = ($libDirs | Select-Object -First 1).DirectoryName
+            $libDir = Join-Path $PWD "deps/sdk-libs-$($arch.msbuild)"
+            New-Item -ItemType Directory -Force -Path $libDir | Out-Null
+            Copy-Item "$sdkDir/foobar2000/shared/shared-$($arch.msbuild).lib" "$libDir/shared.lib" -Force
+
             $bdir = "build-fb2k-$($arch.cmake)"
-            cmake -S . -B $bdir -A $($arch.cmake) -DFB2K_SDK_DIR="$sdkDir" -DWTL_INCLUDE_DIR="$wtlDir" -DFB2K_SDK_LIB_DIR="$libDir" -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded"
+            cmake -S . -B $bdir -A $($arch.cmake) -DFB2K_SDK_DIR="$sdkDir" -DWTL_INCLUDE_DIR="$wtlDir" -DFB2K_SDK_LIB_DIR="$libDir"
+
+            $toolsetMatch = Select-String -Path "$bdir/CMakeCache.txt" -Pattern "^CMAKE_VS_PLATFORM_TOOLSET:INTERNAL=(.+)$"
+            $toolsetProp = if ($toolsetMatch) { "/p:PlatformToolset=$($toolsetMatch.Matches[0].Groups[1].Value)" } else { "" }
+
+            foreach ($proj in $sdkProjects) {
+              msbuild $proj /p:Configuration=Release /p:Platform=$($arch.msbuild) $toolsetProp /p:WholeProgramOptimization=false /p:OutDir="$libDir\" /m
+            }
+
             cmake --build $bdir --config Release --target foo_super_eq
             New-Item -ItemType Directory -Force -Path $arch.out | Out-Null
-            Copy-Item "$bdir/Release/foo_super_eq.dll" "$($arch.out)/foo_super_eq.dll"
+            Copy-Item "$bdir/Release/foo_super_eq.dll" "$($arch.out)/foo_super_eq.dll" -Force
           }
 
           Compress-Archive -Path pkg/* -DestinationPath foo_super_eq.fb2k-component -Force

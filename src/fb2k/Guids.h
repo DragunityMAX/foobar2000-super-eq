@@ -1,6 +1,6 @@
 #pragma once
 
-#include <guiddef.h>
+#include <helpers/foobar2000+atl.h>
 
 namespace super_eq_fb2k {
 

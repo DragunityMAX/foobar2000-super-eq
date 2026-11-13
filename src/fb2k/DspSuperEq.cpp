@@ -11,7 +11,7 @@ class SuperEqPopupDialog : public ATL::CWindowImpl<SuperEqPopupDialog> {
 public:
     DECLARE_WND_CLASS_EX(_T("SuperEqPopupDialogWnd"), 0, COLOR_BTNFACE)
 
-    SuperEqPopupDialog(const super_eq::EQPresetState& init_state, dsp_edit_callback_v2& cb)
+    SuperEqPopupDialog(const super_eq::EQPresetState& init_state, dsp_preset_edit_callback& cb)
         : initial_state_(init_state), callback_(cb) {}
 
     BEGIN_MSG_MAP(SuperEqPopupDialog)
@@ -87,7 +87,7 @@ private:
 
     bool closed_ = false;
     super_eq::EQPresetState initial_state_;
-    dsp_edit_callback_v2& callback_;
+    dsp_preset_edit_callback& callback_;
     SuperEqEditorView view_;
     fb2k::CCoreDarkModeHooks dark_mode_;
 };
@@ -123,21 +123,6 @@ public:
     }
 
     static void g_show_config_popup(const dsp_preset& p_data, HWND p_parent, dsp_preset_edit_callback& p_callback) {
-        class adapter_cb : public dsp_edit_callback_v2 {
-        public:
-            explicit adapter_cb(dsp_preset_edit_callback& inner) : inner_(inner) {}
-            void on_preset_changed(const dsp_preset& p) override { inner_.on_preset_changed(p); }
-        private:
-            dsp_preset_edit_callback& inner_;
-        } adapter(p_callback);
-
-        super_eq::EQPresetState st = super_eq::EQPresetState::create_default_10band();
-        LiveSessionBus::preset_to_state(p_data, st);
-        SuperEqPopupDialog dlg(st, adapter);
-        dlg.run_modal(p_parent);
-    }
-
-    static void g_show_config_popup_v2(const dsp_preset& p_data, HWND p_parent, dsp_edit_callback_v2& p_callback) {
         super_eq::EQPresetState st = super_eq::EQPresetState::create_default_10band();
         LiveSessionBus::preset_to_state(p_data, st);
         SuperEqPopupDialog dlg(st, p_callback);

@@ -1,13 +1,13 @@
 #pragma once
 
+#include <foobar2000/SDK/foobar2000.h>
+#include <helpers/foobar2000+atl.h>
+#include <helpers/DarkMode.h>
+
 #include "LiveSessionBus.h"
 #include "super_eq/dsp_engine.h"
 #include "super_eq/preset_io.h"
 #include "super_eq/spectrum_analyzer.h"
-
-#include <foobar2000/SDK/foobar2000.h>
-#include <helpers/foobar2000+atl.h>
-#include <libPPUI/DarkMode.h>
 
 #include <d2d1.h>
 #include <dwrite.h>
@@ -34,7 +34,7 @@ public:
     SuperEqEditorView() = default;
     ~SuperEqEditorView() override;
 
-    void set_popup_callback(dsp_edit_callback_v2* cb) { popup_callback_ = cb; }
+    void set_popup_callback(dsp_preset_edit_callback* cb) { popup_callback_ = cb; }
     void set_initial_state(const super_eq::EQPresetState& st);
     const super_eq::EQPresetState& state() const { return state_; }
 
@@ -182,7 +182,7 @@ private:
     // State
     super_eq::EQPresetState state_;
     int active_ab_slot_ = 0;
-    dsp_edit_callback_v2* popup_callback_ = nullptr;
+    dsp_preset_edit_callback* popup_callback_ = nullptr;
     super_eq::SpectrumAnalyzer analyzer_;
     super_eq::MeterSnapshot last_meters_{};
 

@@ -12,15 +12,17 @@ LiveSessionBus& LiveSessionBus::instance() {
 }
 
 LiveSessionBus::LiveSessionBus() {
-    if (cfg_saved_slot_a.get_length() > 0) {
+    pfc::string8 s_a = cfg_saved_slot_a.get();
+    if (s_a.get_length() > 0) {
         super_eq::EQPresetState st;
-        if (super_eq::PresetIO::from_json(cfg_saved_slot_a.c_str(), st)) {
+        if (super_eq::PresetIO::from_json(s_a.c_str(), st)) {
             ab_manager_.slot(0) = st;
         }
     }
-    if (cfg_saved_slot_b.get_length() > 0) {
+    pfc::string8 s_b = cfg_saved_slot_b.get();
+    if (s_b.get_length() > 0) {
         super_eq::EQPresetState st;
-        if (super_eq::PresetIO::from_json(cfg_saved_slot_b.c_str(), st)) {
+        if (super_eq::PresetIO::from_json(s_b.c_str(), st)) {
             ab_manager_.slot(1) = st;
         }
     }
@@ -72,7 +74,7 @@ int LiveSessionBus::active_ab_slot() const {
 
 void LiveSessionBus::apply_user_state(const super_eq::EQPresetState& state,
                                       ILiveViewListener* source_listener,
-                                      dsp_edit_callback_v2* popup_callback,
+                                      dsp_preset_edit_callback* popup_callback,
                                       bool live_only) {
     super_eq::EQPresetState clamped = state;
     clamped.clamp();
@@ -107,7 +109,7 @@ void LiveSessionBus::apply_user_state(const super_eq::EQPresetState& state,
 }
 
 void LiveSessionBus::switch_ab_slot(ILiveViewListener* source_listener,
-                                    dsp_edit_callback_v2* popup_callback) {
+                                    dsp_preset_edit_callback* popup_callback) {
     super_eq::EQPresetState st;
     int slot = 0;
     {

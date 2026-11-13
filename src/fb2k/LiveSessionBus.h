@@ -35,11 +35,11 @@ public:
     // otherwise commits directly into foobar2000's active DSP chain configuration (unless live_only is true during drag).
     void apply_user_state(const super_eq::EQPresetState& state,
                           ILiveViewListener* source_listener,
-                          dsp_edit_callback_v2* popup_callback = nullptr,
+                          dsp_preset_edit_callback* popup_callback = nullptr,
                           bool live_only = false);
 
     void switch_ab_slot(ILiveViewListener* source_listener,
-                        dsp_edit_callback_v2* popup_callback = nullptr);
+                        dsp_preset_edit_callback* popup_callback = nullptr);
     void copy_ab_to_other();
 
     // Audio telemetry from active playback engine
